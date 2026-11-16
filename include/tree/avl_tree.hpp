@@ -7,6 +7,10 @@
 #include <memory>
 #include <optional>
 
+namespace avl_test {
+class TreeChecks;
+}
+
 template <typename T, typename Compare = std::less<T>>
 class AVLTree {
 public:
@@ -30,6 +34,8 @@ public:
     void clear() noexcept;
 
 private:
+    friend class avl_test::TreeChecks;
+
     using node_link = std::unique_ptr<Node<T>>;
 
     node_link root_;
