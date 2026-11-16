@@ -1,0 +1,52 @@
+#pragma once
+
+#include "node.hpp"
+
+#include <cstddef>
+#include <functional>
+#include <memory>
+#include <optional>
+
+template <typename T, typename Compare = std::less<T>>
+class AVLTree {
+public:
+    using find_result = std::optional<std::reference_wrapper<const T>>;
+
+    AVLTree() = default;
+    explicit AVLTree(Compare comp);
+
+    AVLTree(const AVLTree&) = delete;
+    AVLTree& operator=(const AVLTree&) = delete;
+
+    bool insert(const T& value);
+    bool erase(const T& key);
+
+    // The reference remains valid until its element is erased or destroyed
+    find_result find(const T& key) const;
+    bool contains(const T& key) const;
+
+    std::size_t size() const noexcept;
+    bool empty() const noexcept;
+    void clear() noexcept;
+
+private:
+    using node_link = std::unique_ptr<Node<T>>;
+
+    node_link root_;
+    std::size_t size_ = 0;
+    Compare comp_{};
+
+    static std::size_t height(const node_link& link) noexcept;  // check a possibly empty link without replacing it
+    static int balance_factor(const Node<T>& node) noexcept;  // read an existing node and its child heights
+    static void update_height(Node<T>& node) noexcept;  // update an existing node in place
+    static void rotate_left(node_link& link) noexcept;  // replace the caller's subtree root
+    static void rotate_right(node_link& link) noexcept;  // replace the caller's subtree root
+    static void rebalance(node_link& link) noexcept;  // update the subtree height and rotate if needed
+    static node_link detach_min(node_link& link) noexcept;  // remove the minimum node and return ownership
+
+    find_result find_impl(const node_link& link, const T& key) const;
+    bool insert_impl(node_link& link, const T& value);
+    bool erase_impl(node_link& link, const T& key);
+};
+
+#include "avl_tree.tpp"
