@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
 
 namespace avl_test {
 class TreeChecks;
@@ -19,8 +20,12 @@ public:
     AVLTree() = default;
     explicit AVLTree(Compare comp);
 
-    AVLTree(const AVLTree&) = delete;
-    AVLTree& operator=(const AVLTree&) = delete;
+    AVLTree(const AVLTree& other);
+    AVLTree(AVLTree&& other) noexcept(std::is_nothrow_copy_constructible_v<Compare>);
+
+    // assignment requires a comparator with a nonthrowing swap
+    AVLTree& operator=(const AVLTree& other);
+    AVLTree& operator=(AVLTree&& other) noexcept;
 
     bool insert(const T& value);
     bool erase(const T& key);
@@ -34,13 +39,16 @@ public:
     void clear() noexcept;
 
 private:
-    friend class avl_test::TreeChecks;
+    friend class avl_test::TreeChecks;  // for tests
 
     using node_link = std::unique_ptr<Node<T>>;
 
+    Compare comp_{};
     node_link root_;
     std::size_t size_ = 0;
-    Compare comp_{};
+
+    void swap_state(AVLTree& other) noexcept;
+    static node_link clone(const node_link& link);
 
     static std::size_t height(const node_link& link) noexcept;  // check a possibly empty link without replacing it
     static int balance_factor(const Node<T>& node) noexcept;  // read an existing node and its child heights

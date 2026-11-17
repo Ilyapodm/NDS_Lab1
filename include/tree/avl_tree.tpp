@@ -5,6 +5,65 @@ template <typename T, typename Compare>
 AVLTree<T, Compare>::AVLTree(Compare comp) : comp_(std::move(comp)) {}
 
 template <typename T, typename Compare>
+AVLTree<T, Compare>::AVLTree(const AVLTree& other)
+        : comp_(other.comp_)
+        , root_(clone(other.root_))
+        , size_(other.size_)
+    {}
+
+template <typename T, typename Compare>
+AVLTree<T, Compare>::AVLTree(AVLTree&& other)
+    noexcept(std::is_nothrow_copy_constructible_v<Compare>) // conditional noexcept
+    // copy the comparator before taking ownership so a failed copy leaves other intact
+        : comp_(other.comp_)  // no difference between copy and move to std::less
+        , root_(std::move(other.root_))
+        , size_(std::exchange(other.size_, 0))  
+    {}
+
+template <typename T, typename Compare>
+AVLTree<T, Compare>& AVLTree<T, Compare>::operator=(const AVLTree& other) {
+    if (this != &other) {
+        AVLTree copy(other);
+        swap_state(copy);
+    }
+    return *this;
+}
+
+template <typename T, typename Compare>
+AVLTree<T, Compare>& AVLTree<T, Compare>::operator=(AVLTree&& other) noexcept {
+    if (this != &other) {
+        swap_state(other);
+        other.clear();
+    }
+    return *this;
+}
+
+template <typename T, typename Compare>
+void AVLTree<T, Compare>::swap_state(AVLTree& other) noexcept {
+    // commit the comparator and its matching tree without an exception between them
+    static_assert(std::is_nothrow_swappable_v<Compare>,
+                  "AVLTree assignment requires a noexcept swap for Compare");
+    using std::swap;
+    swap(comp_, other.comp_);
+    swap(root_, other.root_);
+    swap(size_, other.size_);
+}
+
+template <typename T, typename Compare>
+typename AVLTree<T, Compare>::node_link AVLTree<T, Compare>::clone(const node_link& link) {
+    if (!link) {
+        return nullptr;
+    }
+
+    const Node<T>& node = *link;
+    auto copy = std::make_unique<Node<T>>(node.value);  // make_unique uses explicit constructor, OK
+    copy->left = clone(node.left);
+    copy->right = clone(node.right);
+    copy->height = node.height;
+    return copy;
+}
+
+template <typename T, typename Compare>
 bool AVLTree<T, Compare>::insert(const T& value) {
     if (!insert_impl(root_, value)) {
         return false;

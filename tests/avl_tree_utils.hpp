@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <optional>
+#include <stdexcept>
 
 namespace avl_test {
 
@@ -64,6 +65,55 @@ private:
         EXPECT_EQ(node.height, 1 + taller) << "key " << node.value;
         return 1 + taller;
     }
+};
+
+class CopyCheckedKey {
+public:
+    explicit CopyCheckedKey(int value) : value_(value) {}
+
+    CopyCheckedKey(const CopyCheckedKey& other) : value_(other.value_) {
+        // fail on the second copy so clone has already allocated a node
+        if (copies_before_failure == 0) {
+            throw std::runtime_error("key copy failed");
+        }
+        if (copies_before_failure > 0) {
+            --copies_before_failure;
+        }
+    }
+
+    CopyCheckedKey(CopyCheckedKey&&) = default;
+
+    bool operator<(const CopyCheckedKey& other) const {
+        return value_ < other.value_;
+    }
+
+    inline static int copies_before_failure = -1;
+
+private:
+    int value_;
+};
+
+class CopyCheckedOrder {
+public:
+    explicit CopyCheckedOrder(bool descending) : descending_(descending) {}
+
+    CopyCheckedOrder(const CopyCheckedOrder& other) : descending_(other.descending_) {
+        if (fail_on_copy) {
+            throw std::runtime_error("comparator copy failed");
+        }
+    }
+
+    CopyCheckedOrder(CopyCheckedOrder&&) noexcept = default;
+    CopyCheckedOrder& operator=(CopyCheckedOrder&&) noexcept = default;
+
+    bool operator()(int left, int right) const {
+        return descending_ ? left > right : left < right;
+    }
+
+    inline static bool fail_on_copy = false;
+
+private:
+    bool descending_;
 };
 
 }  // namespace avl_test

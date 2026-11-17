@@ -1,6 +1,7 @@
 #include "avl_tree_utils.hpp"
 
 #include <gtest/gtest.h>
+#include <utility>
 
 using avl_test::TreeChecks;
 
@@ -117,4 +118,104 @@ TEST(AvlTree, ClearAndReuseTree) {
     TreeChecks::insert_values(tree, {4});
     EXPECT_TRUE(tree.erase(4));
     TreeChecks::expect_valid(tree, 0);
+}
+
+TEST(AvlTree, CopyCreatesIndependentTrees) {
+    AVLTree<int> source;
+    TreeChecks::insert_values(source, {4, 2, 6, 1});
+
+    AVLTree<int> copy(source);
+    TreeChecks::expect_valid(copy, 4);
+    TreeChecks::expect_root(copy, 4);
+    for (int value : {1, 2, 4, 6}) {
+        const auto original = source.find(value);
+        const auto cloned = copy.find(value);
+        ASSERT_TRUE(original && cloned);
+        EXPECT_NE(&original->get(), &cloned->get());
+    }
+
+    AVLTree<int> assigned;
+    TreeChecks::insert_values(assigned, {9});
+    assigned = source;
+    TreeChecks::expect_valid(assigned, 4);
+    EXPECT_FALSE(assigned.contains(9));
+    EXPECT_TRUE(assigned.erase(2));
+    TreeChecks::expect_valid(assigned, 3);
+    EXPECT_TRUE(source.contains(2));
+    TreeChecks::expect_valid(source, 4);
+}
+
+TEST(AvlTree, MoveTransfersNodesAndLeavesSourceReusable) {
+    AVLTree<int> source;
+    TreeChecks::insert_values(source, {4, 2, 6});
+    const auto element = source.find(2);
+    ASSERT_TRUE(element);
+    const int& original = element->get();
+
+    AVLTree<int> moved(std::move(source));
+    TreeChecks::expect_valid(source, 0);
+    TreeChecks::expect_valid(moved, 3);
+    TreeChecks::insert_values(source, {1});
+
+    source = std::move(moved);
+    TreeChecks::expect_valid(moved, 0);
+    TreeChecks::expect_valid(source, 3);
+    EXPECT_FALSE(source.contains(1));
+    EXPECT_TRUE(source.contains(4));
+    EXPECT_TRUE(source.contains(6));
+
+    // the final reference still refers to the original node
+    const auto transferred = source.find(2);
+    ASSERT_TRUE(transferred);
+    EXPECT_EQ(&transferred->get(), &original);
+    TreeChecks::insert_values(moved, {8});
+}
+
+TEST(AvlTree, FailedKeyCopyPreservesBothTrees) {
+    using avl_test::CopyCheckedKey;
+
+    AVLTree<CopyCheckedKey> source;
+    ASSERT_TRUE(source.insert(CopyCheckedKey{2}));
+    ASSERT_TRUE(source.insert(CopyCheckedKey{1}));
+    AVLTree<CopyCheckedKey> target;
+    ASSERT_TRUE(target.insert(CopyCheckedKey{9}));
+
+    CopyCheckedKey::copies_before_failure = 1;
+    EXPECT_THROW(target = source, std::runtime_error);
+    CopyCheckedKey::copies_before_failure = -1;
+
+    EXPECT_EQ(source.size(), 2u);
+    EXPECT_TRUE(source.contains(CopyCheckedKey{1}));
+    EXPECT_TRUE(source.contains(CopyCheckedKey{2}));
+    EXPECT_EQ(target.size(), 1u);
+    EXPECT_TRUE(target.contains(CopyCheckedKey{9}));
+}
+
+TEST(AvlTree, ComparatorCopyFailurePreservesTreesAndMoveAssignmentSkipsCopy) {
+    using avl_test::CopyCheckedOrder;
+
+    AVLTree<int, CopyCheckedOrder> source(CopyCheckedOrder{true});
+    ASSERT_TRUE(source.insert(2));
+    ASSERT_TRUE(source.insert(1));
+    AVLTree<int, CopyCheckedOrder> target(CopyCheckedOrder{false});
+    ASSERT_TRUE(target.insert(9));
+
+    CopyCheckedOrder::fail_on_copy = true;
+    EXPECT_THROW(target = source, std::runtime_error);
+    EXPECT_THROW((AVLTree<int, CopyCheckedOrder>(std::move(source))), std::runtime_error);
+    EXPECT_EQ(target.size(), 1u);
+    EXPECT_TRUE(target.contains(9));
+    EXPECT_EQ(source.size(), 2u);
+    EXPECT_TRUE(source.contains(1));
+    EXPECT_TRUE(source.contains(2));
+
+    // keep copies disabled to verify that move assignment only swaps comparator state
+    target = std::move(source);
+    CopyCheckedOrder::fail_on_copy = false;
+
+    EXPECT_TRUE(source.empty());
+    EXPECT_EQ(target.size(), 2u);
+    EXPECT_TRUE(target.contains(1));
+    EXPECT_TRUE(target.contains(2));
+    EXPECT_FALSE(target.contains(9));
 }
