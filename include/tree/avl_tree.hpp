@@ -42,8 +42,13 @@ public:
 
     // the visitor must not modify the structure of this tree during traversal
     template <typename Visitor>
-        requires std::invocable<Visitor&, const T&>  // can we call Visitor& with const T& argument
-    void for_each(TraversalOrder order, Visitor&& visitor) const;
+        requires std::invocable<Visitor&, const T&>  // can we call Visitor& with const T& argument or no
+    void for_each(TraversalOrder order, Visitor&& visitor) const;  // Visitor&& visitor - forwarding reference
+
+    // visit each level from left to right without modifying the tree structure
+    template <typename Visitor>
+        requires std::invocable<Visitor&, const T&>
+    void for_each_bfs(Visitor&& visitor) const;
 
 private:
     friend class avl_test::TreeChecks;  // for tests
@@ -69,7 +74,7 @@ private:
     bool insert_impl(node_link& link, const T& value);
     bool erase_impl(node_link& link, const T& key);
 
-    template <typename Visitor>
+    template <typename Visitor>  // any callable typename
     static void traverse_impl(const Node<T>& node, TraversalOrder order, Visitor& visitor);
 };
 

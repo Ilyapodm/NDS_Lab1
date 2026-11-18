@@ -1,3 +1,5 @@
+#include "containers/queue.hpp"
+
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
@@ -297,12 +299,13 @@ void AVLTree<T, Compare>::traverse_impl(const Node<T>& node,
     const bool left_first = order == TraversalOrder::KLP
                          || order == TraversalOrder::LKP
                          || order == TraversalOrder::LPK;
-    const auto& first = left_first ? node.left : node.right;
-    const auto& second = left_first ? node.right : node.left;
+    
+    const node_link& first = left_first ? node.left : node.right;
+    const node_link& second = left_first ? node.right : node.left;
 
     // the position of k selects when to visit the value between the two subtrees
     if (order == TraversalOrder::KLP || order == TraversalOrder::KPL) {
-        std::invoke(visitor, node.value);
+        std::invoke(visitor, node.value); // invoke because supports ptrs to methods
     }
     if (first) {
         traverse_impl(*first, order, visitor);
@@ -315,5 +318,32 @@ void AVLTree<T, Compare>::traverse_impl(const Node<T>& node,
     }
     if (order == TraversalOrder::LPK || order == TraversalOrder::PLK) {
         std::invoke(visitor, node.value);
+    }
+}
+
+template <typename T, typename Compare>
+template <typename Visitor>
+    requires std::invocable<Visitor&, const T&>
+void AVLTree<T, Compare>::for_each_bfs(Visitor&& visitor) const {
+    if (!root_) {
+        return;
+    }
+
+    // queue entries refer to nodes that remain owned by the tree
+    Queue<std::reference_wrapper<const Node<T>>> pending;
+    pending.push(std::cref(*root_));
+
+    while (!pending.empty()) {
+        const Node<T>& node = pending.front().get();
+        // popping destroys the queue entry while the tree node stays alive
+        pending.pop();
+        std::invoke(visitor, node.value);
+
+        if (node.left) {
+            pending.push(std::cref(*node.left));
+        }
+        if (node.right) {
+            pending.push(std::cref(*node.right));
+        }
     }
 }
