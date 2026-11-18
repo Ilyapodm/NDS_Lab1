@@ -1,7 +1,9 @@
 #pragma once
 
 #include "node.hpp"
+#include "traversal_order.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -38,6 +40,11 @@ public:
     bool empty() const noexcept;
     void clear() noexcept;
 
+    // the visitor must not modify the structure of this tree during traversal
+    template <typename Visitor>
+        requires std::invocable<Visitor&, const T&>  // can we call Visitor& with const T& argument
+    void for_each(TraversalOrder order, Visitor&& visitor) const;
+
 private:
     friend class avl_test::TreeChecks;  // for tests
 
@@ -61,6 +68,9 @@ private:
     find_result find_impl(const node_link& link, const T& key) const;
     bool insert_impl(node_link& link, const T& value);
     bool erase_impl(node_link& link, const T& key);
+
+    template <typename Visitor>
+    static void traverse_impl(const Node<T>& node, TraversalOrder order, Visitor& visitor);
 };
 
 #include "avl_tree.tpp"

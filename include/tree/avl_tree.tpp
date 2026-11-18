@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 template <typename T, typename Compare>
@@ -263,4 +264,56 @@ bool AVLTree<T, Compare>::erase_impl(node_link& link, const T& key) {
 
     rebalance(link);
     return true;
+}
+
+template <typename T, typename Compare>
+template <typename Visitor>
+    requires std::invocable<Visitor&, const T&>
+void AVLTree<T, Compare>::for_each(TraversalOrder order, Visitor&& visitor) const {
+    // validate before visiting any values, including when the tree is empty
+    switch (order) {
+    case TraversalOrder::KLP:
+    case TraversalOrder::KPL:
+    case TraversalOrder::LPK:
+    case TraversalOrder::LKP:
+    case TraversalOrder::PLK:
+    case TraversalOrder::PKL:
+        break;
+    default:
+        throw std::invalid_argument("invalid traversal order");
+    }
+
+    if (root_) {
+        traverse_impl(*root_, order, visitor);
+    }
+}
+
+template <typename T, typename Compare>
+template <typename Visitor>
+void AVLTree<T, Compare>::traverse_impl(const Node<T>& node,
+                                      TraversalOrder order,
+                                      Visitor& visitor) {
+
+    const bool left_first = order == TraversalOrder::KLP
+                         || order == TraversalOrder::LKP
+                         || order == TraversalOrder::LPK;
+    const auto& first = left_first ? node.left : node.right;
+    const auto& second = left_first ? node.right : node.left;
+
+    // the position of k selects when to visit the value between the two subtrees
+    if (order == TraversalOrder::KLP || order == TraversalOrder::KPL) {
+        std::invoke(visitor, node.value);
+    }
+    if (first) {
+        traverse_impl(*first, order, visitor);
+    }
+    if (order == TraversalOrder::LKP || order == TraversalOrder::PKL) {
+        std::invoke(visitor, node.value);
+    }
+    if (second) {
+        traverse_impl(*second, order, visitor);
+    }
+    if (order == TraversalOrder::LPK || order == TraversalOrder::PLK) {
+        std::invoke(visitor, node.value);
+    }
 }
