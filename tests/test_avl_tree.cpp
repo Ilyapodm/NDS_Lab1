@@ -1,7 +1,9 @@
 #include "avl_tree_utils.hpp"
 
 #include <gtest/gtest.h>
+#include <array>
 #include <utility>
+#include <vector>
 
 using avl_test::TreeChecks;
 
@@ -218,4 +220,101 @@ TEST(AvlTree, ComparatorCopyFailurePreservesTreesAndMoveAssignmentSkipsCopy) {
     EXPECT_TRUE(target.contains(1));
     EXPECT_TRUE(target.contains(2));
     EXPECT_FALSE(target.contains(9));
+}
+
+TEST(AvlTree, DfsVisitsAllSixOrders) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {4, 2, 6, 1, 3, 5, 7});
+
+    const std::array orders{
+        TraversalOrder::KLP, TraversalOrder::KPL, TraversalOrder::LPK,
+        TraversalOrder::LKP, TraversalOrder::PLK, TraversalOrder::PKL
+    };
+    const std::array<std::vector<int>, 6> expected{{
+        {4, 2, 1, 3, 6, 5, 7},
+        {4, 6, 7, 5, 2, 3, 1},
+        {1, 3, 2, 5, 7, 6, 4},
+        {1, 2, 3, 4, 5, 6, 7},
+        {7, 5, 6, 3, 1, 2, 4},
+        {7, 6, 5, 4, 3, 2, 1}
+    }};
+
+    const auto& read_only = tree;
+    for (std::size_t index = 0; index < orders.size(); ++index) {
+        SCOPED_TRACE(index);
+        std::vector<int> visited;
+        read_only.for_each(orders[index], [&](const int& value) {
+            visited.push_back(value);
+        });
+        EXPECT_EQ(visited, expected[index]);
+    }
+    TreeChecks::expect_valid(tree, 7);
+}
+
+TEST(AvlTree, BfsVisitsLevelsFromLeftToRight) {
+    AVLTree<int> tree;
+    // the missing rightmost leaf also checks a node with only one child
+    TreeChecks::insert_values(tree, {4, 2, 6, 1, 3, 5});
+
+    std::vector<int> visited;
+    const auto& read_only = tree;
+    read_only.for_each_bfs([&](const int& value) {
+        visited.push_back(value);
+    });
+    EXPECT_EQ(visited, (std::vector<int>{4, 2, 6, 1, 3, 5}));
+    TreeChecks::expect_valid(tree, 6);
+}
+
+TEST(AvlTree, TraversalsHandleEmptyTreeAndSingleNode) {
+    AVLTree<int> tree;
+    const std::array orders{
+        TraversalOrder::KLP, TraversalOrder::KPL, TraversalOrder::LPK,
+        TraversalOrder::LKP, TraversalOrder::PLK, TraversalOrder::PKL
+    };
+    std::vector<int> visited;
+    auto visitor = [&](const int& value) { visited.push_back(value); };
+
+    for (auto order : orders) {
+        tree.for_each(order, visitor);
+    }
+    tree.for_each_bfs(visitor);
+    EXPECT_TRUE(visited.empty());
+
+    TreeChecks::insert_values(tree, {9});
+    for (auto order : orders) {
+        visited.clear();
+        tree.for_each(order, visitor);
+        EXPECT_EQ(visited, std::vector<int>{9});
+    }
+    visited.clear();
+    tree.for_each_bfs(visitor);
+    EXPECT_EQ(visited, std::vector<int>{9});
+    TreeChecks::expect_valid(tree, 1);
+}
+
+TEST(AvlTree, TraversalsPropagateVisitorErrorsAndRejectInvalidOrder) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {2, 1, 3});
+    int calls = 0;
+    auto visitor = [&](const int&) {
+        if (++calls == 2) {
+            throw std::runtime_error("visitor failed");
+        }
+    };
+
+    EXPECT_THROW(tree.for_each(TraversalOrder::LKP, visitor), std::runtime_error);
+    EXPECT_EQ(calls, 2);
+    calls = 0;
+    EXPECT_THROW(tree.for_each_bfs(visitor), std::runtime_error);
+    EXPECT_EQ(calls, 2);
+
+    calls = 0;
+    // enum values can be constructed explicitly from an invalid integer
+    EXPECT_THROW(tree.for_each(static_cast<TraversalOrder>(99), visitor),
+                 std::invalid_argument);
+    EXPECT_EQ(calls, 0);
+    TreeChecks::expect_valid(tree, 3);
+    EXPECT_TRUE(tree.contains(1));
+    EXPECT_TRUE(tree.contains(2));
+    EXPECT_TRUE(tree.contains(3));
 }
