@@ -76,6 +76,15 @@ bool AVLTree<T, Compare>::insert(const T& value) {
 }
 
 template <typename T, typename Compare>
+bool AVLTree<T, Compare>::insert(T&& value) {
+    if (!insert_impl(root_, std::move(value))) {
+        return false;
+    }
+    ++size_;
+    return true;
+}
+
+template <typename T, typename Compare>
 bool AVLTree<T, Compare>::erase(const T& key) {
     if (!erase_impl(root_, key)) {
         return false;
@@ -230,6 +239,31 @@ bool AVLTree<T, Compare>::insert_impl(node_link& link, const T& value) {
 }
 
 template <typename T, typename Compare>
+bool AVLTree<T, Compare>::insert_impl(node_link& link, T&& value) {
+    // move the value only after finding an empty link
+    if (!link) {
+        link = std::make_unique<Node<T>>(std::move(value));
+        return true;
+    }
+
+    const T& node_value = link->value;  // to make code readeable
+    if (comp_(value, node_value)) {
+        if (!insert_impl(link->left, std::move(value))) {
+            return false;
+        }
+    } else if (comp_(node_value, value)) {
+        if (!insert_impl(link->right, std::move(value))) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    rebalance(link);
+    return true;
+}
+
+template <typename T, typename Compare>
 bool AVLTree<T, Compare>::erase_impl(node_link& link, const T& key) {
     if (!link) {
         return false;
@@ -346,4 +380,43 @@ void AVLTree<T, Compare>::for_each_bfs(Visitor&& visitor) const {
             pending.push(std::cref(*node.right));
         }
     }
+}
+
+template <typename T, typename Compare>
+template <typename Mapper>
+    requires std::invocable<Mapper&, const T&>
+          && std::same_as<std::invoke_result_t<Mapper&, const T&>, T>
+AVLTree<T, Compare> AVLTree<T, Compare>::map(Mapper&& mapper) const {
+    AVLTree<T, Compare> result(comp_);
+    for_each(TraversalOrder::LKP, [&](const T& value) {
+        // insertion restores order and merges equivalent mapped values
+        result.insert(std::invoke(mapper, value));
+    });
+
+    return result;
+}
+
+template <typename T, typename Compare>
+template <typename Predicate>
+    requires std::predicate<Predicate&, const T&>
+AVLTree<T, Compare> AVLTree<T, Compare>::where(Predicate&& predicate) const {
+    AVLTree<T, Compare> result(comp_);
+    for_each(TraversalOrder::LKP, [&](const T& value) {
+        if (std::invoke(predicate, value)) {
+            result.insert(value);
+        }
+    });
+
+    return result;
+}
+
+template <typename T, typename Compare>
+template <typename Accumulator, typename Reducer>
+Accumulator AVLTree<T, Compare>::reduce(Accumulator initial, Reducer&& reducer,
+                                       TraversalOrder order) const {
+    for_each(order, [&](const T& value) {
+        // pass ownership of the current accumulator to support move-only values
+        initial = std::invoke(reducer, std::move(initial), value);
+    });
+    return initial;
 }

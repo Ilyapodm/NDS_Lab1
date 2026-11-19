@@ -30,6 +30,7 @@ public:
     AVLTree& operator=(AVLTree&& other) noexcept;
 
     bool insert(const T& value);
+    bool insert(T&& value);
     bool erase(const T& key);
 
     // The reference remains valid until its element is erased or destroyed
@@ -49,6 +50,19 @@ public:
     template <typename Visitor>
         requires std::invocable<Visitor&, const T&>
     void for_each_bfs(Visitor&& visitor) const;
+
+    template <typename Mapper>
+        requires std::invocable<Mapper&, const T&>  // works with argument 'const T&'
+              && std::same_as<std::invoke_result_t<Mapper&, const T&>, T> // return result's type is T
+    AVLTree<T, Compare> map(Mapper&& mapper) const;
+
+    template <typename Predicate>
+        requires std::predicate<Predicate&, const T&>  // is predicate actually
+    AVLTree<T, Compare> where(Predicate&& predicate) const;
+
+    template <typename Accumulator, typename Reducer>
+    Accumulator reduce(Accumulator initial, Reducer&& reducer,
+                       TraversalOrder order = TraversalOrder::LKP) const;
 
 private:
     friend class avl_test::TreeChecks;  // for tests
@@ -72,6 +86,7 @@ private:
 
     find_result find_impl(const node_link& link, const T& key) const;
     bool insert_impl(node_link& link, const T& value);
+    bool insert_impl(node_link& link, T&& value);
     bool erase_impl(node_link& link, const T& key);
 
     template <typename Visitor>  // any callable typename
