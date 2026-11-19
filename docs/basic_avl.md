@@ -133,3 +133,7 @@ void rebalance(std::unique_ptr<Node>& link);
 ## 8. map, where и reduce
 
 Контракты, выбор LKP, вставка с перемещением, исключения и сложность описаны в [документации функциональных операций](avl_functional_operations.md).
+
+## 9. Сериализация
+
+Формат preorder с маркерами, потоковые операции Student, проверки и гарантии описаны в [документации сериализации](avl_serialization.md).

@@ -25,6 +25,7 @@ endif()
 
 add_executable(tests
     test_avl_tree.cpp
+    test_serialization.cpp
     test_set.cpp
     test_containers.cpp
 )
