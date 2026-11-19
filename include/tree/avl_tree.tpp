@@ -1,6 +1,10 @@
 #include "containers/queue.hpp"
+#include "serialization/serialization_utils.hpp"
 
 #include <algorithm>
+#include <limits>
+#include <locale>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -419,4 +423,95 @@ Accumulator AVLTree<T, Compare>::reduce(Accumulator initial, Reducer&& reducer,
         initial = std::invoke(reducer, std::move(initial), value);
     });
     return initial;
+}
+
+template <typename T, typename Compare>
+std::string AVLTree<T, Compare>::serialize() const {
+    std::ostringstream output;
+    // make numbers independent of the process locale, using a decimal point
+    output.imbue(std::locale::classic());
+    serialize_impl(root_, output);
+    // include failures while writing separators and null markers
+    if (!output) {
+        throw std::invalid_argument("failed to write tree");
+    }
+    std::string data = output.str();
+    // every recursive write ends in a space, including the final null marker
+    data.pop_back();
+    return data;
+}
+
+template <typename T, typename Compare>
+void AVLTree<T, Compare>::serialize_impl(const node_link& link, std::ostream& output) {
+    if (!link) {
+        output << "# ";
+        return;
+    }
+
+    // preorder records the value before both child slots
+    // null markers are essential because values alone do not describe the shape
+    serialization::write_value(output, link->value);
+    output << ' ';
+    serialize_impl(link->left, output);
+    serialize_impl(link->right, output);
+}
+
+template <typename T, typename Compare>
+AVLTree<T, Compare> AVLTree<T, Compare>::deserialize(const std::string& data, Compare comp) {
+    AVLTree<T, Compare> result(std::move(comp));
+    std::istringstream input(data);
+    input.imbue(std::locale::classic());
+
+    // construct a separate tree and publish it only after all checks succeed
+    result.root_ = result.deserialize_impl(input, std::nullopt, std::nullopt, 0);
+    serialization::check_input_end(input);
+    return result;
+}
+
+template <typename T, typename Compare>
+typename AVLTree<T, Compare>::node_link AVLTree<T, Compare>::deserialize_impl(
+    std::istream& input,
+    std::optional<std::reference_wrapper<const T>> lower,
+    std::optional<std::reference_wrapper<const T>> upper,
+    std::size_t depth) {
+    input >> std::ws;
+    const int next = input.peek();
+    if (next == std::char_traits<char>::eof()) {
+        throw std::invalid_argument("incomplete tree");
+    }
+    if (next == '#') {
+        input.get();
+        // a marker must stand alone, so reject inputs such as "#abc"
+        serialization::check_value_end(input);
+        return nullptr;
+    }
+
+    // an avl of height h has at least 2^(h / 2) - 1 nodes
+    // twice the bit count of size_t is a safe upper bound on representable height
+    // reject deeper input before recursion since malformed input need not be balanced
+    constexpr std::size_t max_depth = 2 * std::numeric_limits<std::size_t>::digits;
+    if (depth >= max_depth) {
+        throw std::invalid_argument("tree is too deep for an AVL tree");
+    }
+
+    T value = serialization::read_value<T>(input);
+    // bounds come from all ancestors, which also rules out equivalent keys
+    if ((lower && !comp_(lower->get(), value))
+        || (upper && !comp_(value, upper->get()))) {
+        throw std::invalid_argument("invalid BST order or duplicate key");
+    }
+
+    auto node = std::make_unique<Node<T>>(std::move(value));
+    // node stays alive while descendants use its value as a non-owning bound
+    node->left = deserialize_impl(input, lower, std::cref(node->value), depth + 1);
+    node->right = deserialize_impl(input, std::cref(node->value), upper, depth + 1);
+
+    // children are complete, so their computed heights can validate this node
+    // do not rotate here since that would silently change an invalid input tree
+    update_height(*node);
+    if (balance_factor(*node) < -1 || balance_factor(*node) > 1) {
+        throw std::invalid_argument("invalid AVL balance");
+    }
+    ++size_;
+    return node;
 }

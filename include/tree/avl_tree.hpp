@@ -6,8 +6,10 @@
 #include <concepts>
 #include <cstddef>
 #include <functional>
+#include <iosfwd>
 #include <memory>
 #include <optional>
+#include <string>
 #include <type_traits>
 
 namespace avl_test {
@@ -64,6 +66,9 @@ public:
     Accumulator reduce(Accumulator initial, Reducer&& reducer,
                        TraversalOrder order = TraversalOrder::LKP) const;
 
+    std::string serialize() const;
+    static AVLTree<T, Compare> deserialize(const std::string& data, Compare comp = Compare{});
+
 private:
     friend class avl_test::TreeChecks;  // for tests
 
@@ -75,6 +80,13 @@ private:
 
     void swap_state(AVLTree& other) noexcept;
     static node_link clone(const node_link& link);
+
+    static void serialize_impl(const node_link& link, std::ostream& output);
+    node_link deserialize_impl(
+        std::istream& input,
+        std::optional<std::reference_wrapper<const T>> lower,
+        std::optional<std::reference_wrapper<const T>> upper,
+        std::size_t depth);
 
     static std::size_t height(const node_link& link) noexcept;  // check a possibly empty link without replacing it
     static int balance_factor(const Node<T>& node) noexcept;  // read an existing node and its child heights
