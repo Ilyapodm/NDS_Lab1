@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 #include <array>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -317,4 +319,153 @@ TEST(AvlTree, TraversalsPropagateVisitorErrorsAndRejectInvalidOrder) {
     EXPECT_TRUE(tree.contains(1));
     EXPECT_TRUE(tree.contains(2));
     EXPECT_TRUE(tree.contains(3));
+}
+
+TEST(AvlTree, MapRestoresOrderAndMergesDuplicates) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {-2, -1, 0, 1, 2});
+
+    auto mapped = tree.map([](const int& value) { return -value; });
+    TreeChecks::expect_valid(mapped, 5);
+    for (int value : {-2, -1, 0, 1, 2}) {
+        EXPECT_TRUE(mapped.contains(value));
+    }
+
+    auto squares = tree.map([](const int& value) { return value * value; });
+    TreeChecks::expect_valid(squares, 3);
+    for (int value : {0, 1, 4}) {
+        EXPECT_TRUE(squares.contains(value));
+    }
+
+    EXPECT_TRUE(mapped.erase(1));
+    TreeChecks::expect_valid(mapped, 4);
+    EXPECT_TRUE(tree.contains(1));
+    TreeChecks::expect_valid(tree, 5);
+}
+
+TEST(AvlTree, WhereSelectsSomeAllOrNoValues) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {2, 1, 3, 4});
+
+    auto even = tree.where([](const int& value) { return value % 2 == 0; });
+    TreeChecks::expect_valid(even, 2);
+    EXPECT_TRUE(even.contains(2));
+    EXPECT_TRUE(even.contains(4));
+
+    auto all = tree.where([](const int&) { return true; });
+    TreeChecks::expect_valid(all, 4);
+    for (int value : {1, 2, 3, 4}) {
+        EXPECT_TRUE(all.contains(value));
+    }
+
+    auto none = tree.where([](const int&) { return false; });
+    TreeChecks::expect_valid(none, 0);
+
+    EXPECT_TRUE(even.erase(2));
+    TreeChecks::expect_valid(even, 1);
+    EXPECT_TRUE(tree.contains(2));
+    TreeChecks::expect_valid(tree, 4);
+}
+
+TEST(AvlTree, ReduceUsesInitialValueAndSelectedOrder) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {2, 1, 3});
+
+    EXPECT_EQ(tree.reduce(10, [](int total, const int& value) {
+        return total + value;
+    }), 16);
+
+    // concatenation makes traversal order observable
+    auto join = [](std::string text, const int& value) {
+        return text + std::to_string(value);
+    };
+    EXPECT_EQ(tree.reduce(std::string{}, join), "123");
+    EXPECT_EQ(tree.reduce(std::string{}, join, TraversalOrder::KLP), "213");
+    TreeChecks::expect_valid(tree, 3);
+}
+
+TEST(AvlTree, ReduceSupportsMoveOnlyAccumulator) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {2, 1, 3});
+
+    auto sum = tree.reduce(std::make_unique<int>(10),
+        [](std::unique_ptr<int> total, const int& value) {
+            *total += value;
+            return total;
+        });
+    ASSERT_TRUE(sum);
+    EXPECT_EQ(*sum, 16);
+    TreeChecks::expect_valid(tree, 3);
+}
+
+TEST(AvlTree, FunctionalOperationsHandleEmptyTreeWithoutCallingHandlers) {
+    AVLTree<int> tree;
+    int calls = 0;
+    auto mapped = tree.map([&](const int& value) {
+        ++calls;
+        return value;
+    });
+    auto filtered = tree.where([&](const int&) {
+        ++calls;
+        return true;
+    });
+    const int result = tree.reduce(9, [&](int total, const int& value) {
+        ++calls;
+        return total + value;
+    });
+
+    EXPECT_EQ(calls, 0);
+    EXPECT_EQ(result, 9);
+    TreeChecks::expect_valid(mapped, 0);
+    TreeChecks::expect_valid(filtered, 0);
+    TreeChecks::expect_valid(tree, 0);
+}
+
+TEST(AvlTree, FunctionalOperationsPreserveSourceWhenHandlersThrow) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {2, 1, 3});
+
+    // fail after one element so the result or accumulator is already partially built
+    EXPECT_THROW(tree.map([](const int& value) {
+        if (value == 2) {
+            throw std::runtime_error("mapper failed");
+        }
+        return value;
+    }), std::runtime_error);
+    TreeChecks::expect_valid(tree, 3);
+
+    EXPECT_THROW(tree.where([](const int& value) {
+        if (value == 2) {
+            throw std::runtime_error("predicate failed");
+        }
+        return true;
+    }), std::runtime_error);
+    TreeChecks::expect_valid(tree, 3);
+
+    EXPECT_THROW(tree.reduce(0, [](int total, const int& value) {
+        if (value == 2) {
+            throw std::runtime_error("reducer failed");
+        }
+        return total + value;
+    }), std::runtime_error);
+    TreeChecks::expect_valid(tree, 3);
+    for (int value : {1, 2, 3}) {
+        EXPECT_TRUE(tree.contains(value));
+    }
+}
+
+TEST(AvlTree, MapAndWherePreserveComparatorState) {
+    AVLTree<int, avl_test::CopyCheckedOrder> tree(avl_test::CopyCheckedOrder{true});
+    for (int value : {2, 1, 3}) {
+        ASSERT_TRUE(tree.insert(value));
+    }
+
+    auto mapped = tree.map([](const int& value) { return value + 10; });
+    auto filtered = tree.where([](const int& value) { return value > 1; });
+    auto join = [](std::string text, const int& value) {
+        return text + std::to_string(value) + " ";
+    };
+    EXPECT_EQ(mapped.reduce(std::string{}, join), "13 12 11 ");
+    EXPECT_EQ(filtered.reduce(std::string{}, join), "3 2 ");
+    EXPECT_EQ(tree.reduce(std::string{}, join), "3 2 1 ");
 }
