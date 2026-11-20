@@ -1,4 +1,5 @@
+# build the benchmark as a separate executable
 add_executable(bench benchmark.cpp)
 
-# оба контейнера через зависимость Set от AVLTree
-target_link_libraries(bench PRIVATE nds_lab1_set)
+# inherit the container headers and the c++20 requirement from its library target
+target_link_libraries(bench PRIVATE nds_lab1_avl_tree)
