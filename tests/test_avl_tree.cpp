@@ -1,5 +1,5 @@
-#include "comparator_utils.hpp"
-#include "avl_tree_utils.hpp"
+#include "tests_utils/comparator_utils.hpp"
+#include "tests_utils/avl_tree_utils.hpp"
 
 #include <gtest/gtest.h>
 #include <array>

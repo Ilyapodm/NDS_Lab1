@@ -1,4 +1,4 @@
-#include "comparator_utils.hpp"
+#include "tests_utils/comparator_utils.hpp"
 #include "set/set.hpp"
 #include "models/student.hpp"
 
