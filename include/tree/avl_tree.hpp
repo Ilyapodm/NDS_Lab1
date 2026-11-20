@@ -40,6 +40,7 @@ public:
     // The reference remains valid until its element is erased or destroyed
     find_result find(const T& key) const;
     bool contains(const T& key) const;
+    AVLTree<T, Compare> get_subtree(const T& key) const;
 
     std::size_t size() const noexcept;
     bool empty() const noexcept;
@@ -104,7 +105,7 @@ private:
     static void rebalance(node_link& link) noexcept;  // update the subtree height and rotate if needed
     static node_link detach_min(node_link& link) noexcept;  // remove the minimum node and return ownership
 
-    find_result find_impl(const node_link& link, const T& key) const;
+    const node_link& find_impl(const node_link& link, const T& key) const;
     bool insert_impl(node_link& link, const T& value);
     bool insert_impl(node_link& link, T&& value);
     bool erase_impl(node_link& link, const T& key);

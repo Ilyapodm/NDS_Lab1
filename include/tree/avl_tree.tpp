@@ -108,7 +108,11 @@ bool AVLTree<T, Compare>::erase(const T& key) {
 template <typename T, typename Compare>
 typename AVLTree<T, Compare>::find_result // show, that 'find_result' is a typename and from AVLTree
 AVLTree<T, Compare>::find(const T& key) const {
-    return find_impl(root_, key);
+    const node_link& link = find_impl(root_, key);
+    if (!link) {
+        return std::nullopt;
+    }
+    return std::cref(link->value);
 }
 
 template <typename T, typename Compare>
@@ -207,10 +211,10 @@ AVLTree<T, Compare>::detach_min(node_link& link) noexcept {
 }
 
 template <typename T, typename Compare>
-typename AVLTree<T, Compare>::find_result  // show, that 'find_result' is a typename and from AVLTree
+const typename AVLTree<T, Compare>::node_link&
 AVLTree<T, Compare>::find_impl(const node_link& link, const T& key) const {
     if (!link) {
-        return std::nullopt;
+        return link;
     }
 
     const Node<T>& node = *link;
@@ -222,7 +226,7 @@ AVLTree<T, Compare>::find_impl(const node_link& link, const T& key) const {
         return find_impl(node.right, key);
     }
 
-    return std::cref(node.value);
+    return link;
 }
 
 template <typename T, typename Compare>
@@ -548,4 +552,22 @@ bool AVLTree<T, Compare>::all_of_impl(const node_link& link, Predicate& predicat
     return all_of_impl(node.left, predicate)
         && std::invoke(predicate, node.value)
         && all_of_impl(node.right, predicate);
+}
+
+template <typename T, typename Compare>
+AVLTree<T, Compare> AVLTree<T, Compare>::get_subtree(const T& key) const {
+    // borrow the owning link only for the duration of this operation
+    const node_link& link = find_impl(root_, key);
+    if (!link) {
+        throw std::out_of_range("subtree root was not found");
+    }
+
+    AVLTree<T, Compare> result(comp_);
+    // clone preserves the shape and heights and gives the result its own nodes
+    result.root_ = clone(link);
+    // subtree sizes are not stored in nodes, so count the copied values in one traversal
+    result.for_each(TraversalOrder::LKP, [&](const T&) {
+        ++result.size_;
+    });
+    return result;
 }

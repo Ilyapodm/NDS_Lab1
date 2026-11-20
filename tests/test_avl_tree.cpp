@@ -538,3 +538,79 @@ TEST(AvlTree, CopyWithSelectedComparatorCleansUpAfterCopyFailure) {
     EXPECT_TRUE(source.contains(CopyCheckedKey{1}));
     EXPECT_TRUE(source.contains(CopyCheckedKey{2}));
 }
+
+TEST(AvlTree, ExtractsIndependentSubtreeLeafAndWholeTree) {
+    AVLTree<int> tree;
+    TreeChecks::insert_values(tree, {4, 2, 6, 1, 3, 5, 7});
+
+    auto subtree = tree.get_subtree(2);
+    TreeChecks::expect_valid(subtree, 3);
+    EXPECT_EQ(subtree.serialize(), "2 1 # # 3 # #");
+    const auto original = tree.find(2);
+    const auto copied = subtree.find(2);
+    ASSERT_TRUE(original && copied);
+    EXPECT_NE(&original->get(), &copied->get());
+
+    const auto leaf = tree.get_subtree(5);
+    TreeChecks::expect_valid(leaf, 1);
+    EXPECT_EQ(leaf.serialize(), "5 # #");
+    const auto whole = tree.get_subtree(4);
+    TreeChecks::expect_valid(whole, 7);
+    EXPECT_EQ(whole.serialize(), tree.serialize());
+
+    EXPECT_TRUE(subtree.erase(1));
+    TreeChecks::expect_valid(subtree, 2);
+    EXPECT_TRUE(tree.contains(1));
+    EXPECT_TRUE(tree.erase(3));
+    TreeChecks::expect_valid(tree, 6);
+    EXPECT_TRUE(subtree.contains(3));
+}
+
+TEST(AvlTree, MissingSubtreeRootThrowsWithoutChangingTree) {
+    AVLTree<int> tree;
+    EXPECT_THROW(tree.get_subtree(1), std::out_of_range);
+    TreeChecks::expect_valid(tree, 0);
+    TreeChecks::insert_values(tree, {2, 1, 3});
+    EXPECT_THROW(tree.get_subtree(9), std::out_of_range);
+    TreeChecks::expect_valid(tree, 3);
+    EXPECT_EQ(tree.serialize(), "2 1 # # 3 # #");
+}
+
+TEST(AvlTree, SubtreePreservesComparatorStateAndOrder) {
+    using comparator_test::CountingOrder;
+    int calls = 0;
+    AVLTree<int, CountingOrder> tree(CountingOrder{std::ref(calls)});
+    for (int value : {2, 1, 3}) {
+        tree.insert(value);
+    }
+    const auto subtree = tree.get_subtree(2);
+    EXPECT_EQ(&subtree.key_comp().calls.get(), &calls);
+    EXPECT_EQ(subtree.size(), 3u);
+    EXPECT_TRUE(subtree.contains(1));
+
+    AVLTree<int, std::greater<int>> descending;
+    for (int value : {4, 2, 6, 1, 3, 5, 7}) {
+        descending.insert(value);
+    }
+    const auto reversed = descending.get_subtree(6);
+    EXPECT_EQ(reversed.serialize(), "6 7 # # 5 # #");
+    EXPECT_EQ(reversed.size(), 3u);
+    EXPECT_TRUE(reversed.contains(5));
+}
+
+TEST(AvlTree, FailedSubtreeCopyPreservesSource) {
+    using avl_test::CopyCheckedKey;
+    AVLTree<CopyCheckedKey> tree;
+    tree.insert(CopyCheckedKey{2});
+    tree.insert(CopyCheckedKey{1});
+    tree.insert(CopyCheckedKey{3});
+
+    // fail after the root has been copied to exercise partial clone cleanup
+    CopyCheckedKey::copies_before_failure = 1;
+    EXPECT_THROW(tree.get_subtree(CopyCheckedKey{2}), std::runtime_error);
+    CopyCheckedKey::copies_before_failure = -1;
+    EXPECT_EQ(tree.size(), 3u);
+    EXPECT_TRUE(tree.contains(CopyCheckedKey{1}));
+    EXPECT_TRUE(tree.contains(CopyCheckedKey{2}));
+    EXPECT_TRUE(tree.contains(CopyCheckedKey{3}));
+}
