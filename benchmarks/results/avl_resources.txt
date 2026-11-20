@@ -1,0 +1,23 @@
+	Command being timed: "build-release/benchmarks/bench /tmp/nds-avl-full.csv 3 10000 30000 100000 300000 1000000 3000000 10000000 30000000 100000000"
+	User time (seconds): 826.78
+	System time (seconds): 17.48
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 14:04.36
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5083256
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 16480154
+	Voluntary context switches: 1
+	Involuntary context switches: 10640
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
