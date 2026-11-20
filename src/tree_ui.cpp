@@ -25,7 +25,8 @@ void run_tree_ui(AVLTree<int>& tree) {
     while (true) {
         std::cout << "\nAVLTree<int>, элементов: " << tree.size() << '\n';
         ui::print_common_menu();
-        std::cout << "20 DFS  21 BFS  22 reduce (строка в выбранном DFS-порядке)\n";
+        std::cout << "20 DFS  21 BFS  22 reduce (строка в выбранном DFS-порядке)\n"
+                  << "23 Извлечь поддерево по значению корня\n";
         const int action = ui::read_value<int>("Действие: ");
         if (action == 0) {
             return;
@@ -55,6 +56,15 @@ void run_tree_ui(AVLTree<int>& tree) {
                         return text + std::to_string(value) + " ";
                     }, order);
                 std::cout << "Свёртка: " << joined << '\n';
+                break;
+            }
+            case 23: {
+                const int key = ui::read_value<int>("Значение корня поддерева: ");
+                // get_subtree creates an independent copy and preserves the original tree
+                const auto subtree = tree.get_subtree(key);
+                std::cout << "Поддерево: " << subtree
+                          << "\nРазмер поддерева: " << subtree.size()
+                          << "\nСериализация поддерева: " << subtree.serialize() << '\n';
                 break;
             }
             default:
