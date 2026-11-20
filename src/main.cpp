@@ -1,3 +1,5 @@
+#include "console_ui.hpp"
+
 int main() {
-    return 0;
+    return run_console_ui();
 }

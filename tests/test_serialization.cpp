@@ -1,4 +1,6 @@
 #include "models/student_streams.hpp"
+#include "set/set_streams.hpp"
+#include "tree/tree_streams.hpp"
 #include "tests_utils/avl_tree_utils.hpp"
 
 #include <gtest/gtest.h>
@@ -136,4 +138,32 @@ TEST(Serialization, PreservesCompleteStudentRecords) {
     EXPECT_TRUE(output.fail());
     EXPECT_THROW(AVLTree<Student>::deserialize("17 \"Ivan\" \"Petrov\" 2005 # #"),
                  std::invalid_argument);
+}
+
+TEST(AvlTree, StreamOutputShowsOrderedValuesAndEmptyTree) {
+    AVLTree<int> tree;
+    std::ostringstream output;
+    output << tree;
+    EXPECT_EQ(output.str(), "[]");
+
+    for (int value : {2, 3, 1}) {
+        tree.insert(value);
+    }
+    output.str("");
+    output << tree;
+    EXPECT_EQ(output.str(), "[1, 2, 3]");
+}
+
+TEST(Set, StreamOutputShowsComparatorOrderAndEmptySet) {
+    Set<int, std::greater<int>> set;
+    std::ostringstream output;
+    output << set;
+    EXPECT_EQ(output.str(), "{}");
+
+    for (int value : {2, 3, 1}) {
+        set.insert(value);
+    }
+    output.str("");
+    output << set;
+    EXPECT_EQ(output.str(), "{3, 2, 1}");
 }
