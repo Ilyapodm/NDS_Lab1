@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <functional>
+#include <string>
 #include <type_traits>
 
 template <typename T, typename Compare = std::less<T>>
@@ -39,6 +40,12 @@ public:
 
     template <typename Accumulator, typename Reducer>
     Accumulator reduce(Accumulator initial, Reducer&& reducer) const;
+
+    // save the internal tree shape and complete stored values
+    std::string serialize() const;
+
+    // build a new set using the supplied comparator to validate the stored order
+    static Set<T, Compare> deserialize(const std::string& data, Compare comp = Compare{});
 
     // binary operations require comparators defining the same order and key equivalence
     // union and intersection keep the left operand's value for equivalent keys

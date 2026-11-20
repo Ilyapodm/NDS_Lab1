@@ -153,3 +153,19 @@ Accumulator Set<T, Compare>::reduce(Accumulator initial, Reducer&& reducer) cons
     // set reduction always uses the tree's default inorder traversal
     return tree_.reduce(std::move(initial), std::forward<Reducer>(reducer));
 }
+
+template <typename T, typename Compare>
+std::string Set<T, Compare>::serialize() const {
+    // the tree already writes values in preorder with # for every empty child
+    // delegating keeps quoting, numeric precision and format checks in one place
+    return tree_.serialize();
+}
+
+template <typename T, typename Compare>
+Set<T, Compare> Set<T, Compare>::deserialize(const std::string& data, Compare comp) {
+    // restore a separate tree and validate the format, key order and avl balance
+    // the comparator is supplied by the caller because its state is not in the string
+    // any error leaves existing sets intact and releases partially built nodes
+    // the private constructor takes ownership of the validated tree without cloning nodes
+    return Set(AVLTree<T, Compare>::deserialize(data, std::move(comp)));
+}

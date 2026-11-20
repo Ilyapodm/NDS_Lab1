@@ -1,6 +1,6 @@
 #include "tests_utils/comparator_utils.hpp"
 #include "set/set.hpp"
-#include "models/student.hpp"
+#include "models/student_streams.hpp"
 
 #include <gtest/gtest.h>
 
@@ -334,4 +334,71 @@ TEST(Set, FunctionalOperationsPropagateErrorsAndPreserveSource) {
     EXPECT_EQ(source.size(), 2u);
     EXPECT_TRUE(source.contains(1));
     EXPECT_TRUE(source.contains(2));
+}
+
+TEST(Set, SerializationRestoresContentsAndEmptySet) {
+    Set<int> source;
+    for (int value : {2, 1, 3}) {
+        source.insert(value);
+    }
+    EXPECT_EQ(source.serialize(), "2 1 # # 3 # #");
+    auto restored = Set<int>::deserialize(source.serialize());
+    EXPECT_EQ(restored, source);
+    EXPECT_EQ(restored.serialize(), source.serialize());
+    EXPECT_TRUE(restored.erase(1));
+    EXPECT_TRUE(source.contains(1));
+
+    EXPECT_EQ(Set<int>{}.serialize(), "#");
+    EXPECT_TRUE(Set<int>::deserialize(" # \n").empty());
+    const auto single = Set<int>::deserialize("7 # #");
+    EXPECT_EQ(single.size(), 1u);
+    EXPECT_TRUE(single.contains(7));
+}
+
+TEST(Set, SerializationPreservesSpecialStringsAndStudentFields) {
+    Set<std::string> strings;
+    for (const std::string value : {"", "#", "hello world", "a\"b\\c"}) {
+        strings.insert(value);
+    }
+    const auto restored_strings = Set<std::string>::deserialize(strings.serialize());
+    EXPECT_EQ(restored_strings, strings);
+
+    const Student original{7, "Anna Maria", "# \"Smith\"", 2005, 4.75};
+    Set<Student> students;
+    students.insert(original);
+    const auto restored_students = Set<Student>::deserialize(students.serialize());
+    EXPECT_EQ(restored_students.size(), 1u);
+    const auto found = restored_students.find(original);
+    ASSERT_TRUE(found);
+    // set equality compares keys, so check the full student record explicitly
+    EXPECT_EQ(found->get(), original);
+}
+
+TEST(Set, DeserializationRejectsInvalidDataAndPreservesAssignmentTarget) {
+    Set<int> target;
+    target.insert(9);
+    for (const std::string data : {
+            "", "2 #", "# #", "2abc # #", "2 2 # # #",
+            "2 3 # # #", "1 # 2 # 3 # #"}) {
+        SCOPED_TRACE(data);
+        EXPECT_THROW(target = Set<int>::deserialize(data), std::invalid_argument);
+        EXPECT_EQ(target.size(), 1u);
+        EXPECT_TRUE(target.contains(9));
+    }
+}
+
+TEST(Set, DeserializationUsesProvidedComparator) {
+    using comparator_test::CountingOrder;
+    using IntSet = Set<int, CountingOrder>;
+    int calls = 0;
+    auto restored = IntSet::deserialize("2 1 # # 3 # #", CountingOrder{std::ref(calls)});
+    calls = 0;
+    EXPECT_TRUE(restored.contains(1));
+    EXPECT_GT(calls, 0);
+
+    using DescendingSet = Set<int, std::greater<int>>;
+    const auto descending = DescendingSet::deserialize("2 3 # # 1 # #");
+    EXPECT_EQ(descending.size(), 3u);
+    EXPECT_TRUE(descending.contains(3));
+    EXPECT_THROW(Set<int>::deserialize(descending.serialize()), std::invalid_argument);
 }
