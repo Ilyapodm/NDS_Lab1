@@ -10,6 +10,10 @@ Set<T, Compare>::Set(const Set& other, Compare comp)
     : tree_(other.tree_, std::move(comp)) {}
 
 template <typename T, typename Compare>
+Set<T, Compare>::Set(AVLTree<T, Compare>&& tree)
+    : tree_(std::move(tree)) {}
+
+template <typename T, typename Compare>
 bool Set<T, Compare>::insert(const T& value) {
     return tree_.insert(value);
 }
@@ -125,4 +129,27 @@ bool Set<T, Compare>::operator==(const Set& other) const {
 template <typename T, typename Compare>
 bool Set<T, Compare>::operator!=(const Set& other) const {
     return !(*this == other);
+}
+
+template <typename T, typename Compare>
+template <typename Mapper>
+    requires std::invocable<Mapper&, const T&>
+          && std::same_as<std::invoke_result_t<Mapper&, const T&>, T>
+Set<T, Compare> Set<T, Compare>::map(Mapper&& mapper) const {
+    // tree map visits source keys in order and keeps the first equivalent result
+    return Set(tree_.map(std::forward<Mapper>(mapper)));
+}
+
+template <typename T, typename Compare>
+template <typename Predicate>
+    requires std::predicate<Predicate&, const T&>
+Set<T, Compare> Set<T, Compare>::where(Predicate&& predicate) const {
+    return Set(tree_.where(std::forward<Predicate>(predicate)));
+}
+
+template <typename T, typename Compare>
+template <typename Accumulator, typename Reducer>
+Accumulator Set<T, Compare>::reduce(Accumulator initial, Reducer&& reducer) const {
+    // set reduction always uses the tree's default inorder traversal
+    return tree_.reduce(std::move(initial), std::forward<Reducer>(reducer));
 }

@@ -2,8 +2,10 @@
 
 #include "tree/avl_tree.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <functional>
+#include <type_traits>
 
 template <typename T, typename Compare = std::less<T>>
 class Set {
@@ -25,6 +27,19 @@ public:
     template <typename Visitor>
     void for_each(Visitor&& visitor) const;
 
+    // equivalent mapped keys keep the first value in the source comparator order
+    template <typename Mapper>
+        requires std::invocable<Mapper&, const T&>
+              && std::same_as<std::invoke_result_t<Mapper&, const T&>, T>
+    Set<T, Compare> map(Mapper&& mapper) const;
+
+    template <typename Predicate>
+        requires std::predicate<Predicate&, const T&>
+    Set<T, Compare> where(Predicate&& predicate) const;
+
+    template <typename Accumulator, typename Reducer>
+    Accumulator reduce(Accumulator initial, Reducer&& reducer) const;
+
     // binary operations require comparators defining the same order and key equivalence
     // union and intersection keep the left operand's value for equivalent keys
     Set<T, Compare> union_with(const Set& other) const;
@@ -36,6 +51,7 @@ public:
 
 private:
     Set(const Set& other, Compare comp);
+    explicit Set(AVLTree<T, Compare>&& tree);
 
     AVLTree<T, Compare> tree_;
 };

@@ -5,6 +5,9 @@
 #include <gtest/gtest.h>
 
 #include <functional>
+#include <memory>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 TEST(Set, BasicOperationsAndCopyAreDelegatedToTree) {
@@ -195,4 +198,140 @@ TEST(Set, AllBinaryResultsUseLeftComparatorForEverySizeBranch) {
             EXPECT_EQ(right_calls, 0);
         }
     }
+}
+
+TEST(Set, MapTransformsValuesWithoutChangingSource) {
+    Set<int> source;
+    for (int value : {1, 2, 3}) {
+        source.insert(value);
+    }
+    auto result = source.map([](const int& value) { return -value; });
+    EXPECT_EQ(result.size(), 3u);
+    for (int value : {1, 2, 3}) {
+        EXPECT_TRUE(result.contains(-value));
+        EXPECT_TRUE(source.contains(value));
+    }
+    EXPECT_TRUE(result.erase(-1));
+    EXPECT_TRUE(source.contains(1));
+    EXPECT_EQ(source.size(), 3u);
+}
+
+TEST(Set, MapCollisionsKeepFirstOriginalKeyInComparatorOrder) {
+    Set<Student> source;
+    source.insert(Student{3, "Third", "Student", 2005, 3.0});
+    source.insert(Student{1, "First", "Student", 2005, 4.0});
+    source.insert(Student{2, "Second", "Student", 2005, 5.0});
+
+    auto merge_keys = [](const Student& student) {
+        Student result = student;
+        result.id = 10;
+        return result;
+    };
+    auto result = source.map(merge_keys);
+    EXPECT_EQ(result.size(), 1u);
+    const Student expected{10, "First", "Student", 2005, 4.0};
+    const auto found = result.find(expected);
+    ASSERT_TRUE(found);
+    EXPECT_EQ(found->get(), expected);
+    EXPECT_EQ(source.size(), 3u);
+
+    // with descending order, the first original key is the numerically largest
+    auto descending = [](const Student& left, const Student& right) { return right < left; };
+    Set<Student, decltype(descending)> reversed(descending);
+    source.for_each([&](const Student& student) { reversed.insert(student); });
+    const auto reversed_result = reversed.map(merge_keys);
+    const auto reversed_found = reversed_result.find(expected);
+    ASSERT_TRUE(reversed_found);
+    EXPECT_EQ(reversed_result.size(), 1u);
+    EXPECT_EQ(reversed_found->get(), (Student{10, "Third", "Student", 2005, 3.0}));
+}
+
+TEST(Set, WhereSelectsSomeAllOrNoValues) {
+    Set<int> source;
+    for (int value : {1, 2, 3, 4}) {
+        source.insert(value);
+    }
+    auto even = source.where([](const int& value) { return value % 2 == 0; });
+    EXPECT_EQ(even.size(), 2u);
+    EXPECT_TRUE(even.contains(2));
+    EXPECT_TRUE(even.contains(4));
+    EXPECT_EQ(source.where([](const int&) { return true; }), source);
+    EXPECT_TRUE(source.where([](const int&) { return false; }).empty());
+    EXPECT_TRUE(even.erase(2));
+    EXPECT_TRUE(source.contains(2));
+    EXPECT_EQ(source.size(), 4u);
+}
+
+TEST(Set, ReduceUsesInitialValueAndComparatorOrder) {
+    Set<int, std::greater<int>> source;
+    for (int value : {2, 1, 3}) {
+        source.insert(value);
+    }
+    EXPECT_EQ(source.reduce(std::string{}, [](std::string text, const int& value) {
+        return text + std::to_string(value);
+    }), "321");
+
+    // transformed and filtered sets retain the original comparator
+    const auto mapped = source.map([](const int& value) { return value + 10; });
+    const auto filtered = source.where([](const int& value) { return value > 1; });
+    auto join = [](std::string text, const int& value) {
+        return text + std::to_string(value) + " ";
+    };
+    EXPECT_EQ(mapped.reduce(std::string{}, join), "13 12 11 ");
+    EXPECT_EQ(filtered.reduce(std::string{}, join), "3 2 ");
+
+    auto total = source.reduce(std::make_unique<int>(10),
+        [](std::unique_ptr<int> accumulator, const int& value) {
+            *accumulator += value;
+            return accumulator;
+        });
+    ASSERT_TRUE(total);
+    EXPECT_EQ(*total, 16);
+}
+
+TEST(Set, FunctionalOperationsHandleEmptySetWithoutCallingHandlers) {
+    Set<int> empty;
+    int calls = 0;
+    EXPECT_TRUE(empty.map([&](const int& value) {
+        ++calls;
+        return value;
+    }).empty());
+    EXPECT_TRUE(empty.where([&](const int&) {
+        ++calls;
+        return true;
+    }).empty());
+    EXPECT_EQ(empty.reduce(7, [&](int total, const int& value) {
+        ++calls;
+        return total + value;
+    }), 7);
+    EXPECT_EQ(calls, 0);
+}
+
+TEST(Set, FunctionalOperationsPropagateErrorsAndPreserveSource) {
+    Set<int> source;
+    source.insert(1);
+    source.insert(2);
+    auto mapper = [](const int& value) {
+        if (value == 2) {
+            throw std::runtime_error("mapper failed");
+        }
+        return value;
+    };
+    auto predicate = [](const int& value) {
+        if (value == 2) {
+            throw std::runtime_error("predicate failed");
+        }
+        return true;
+    };
+    EXPECT_THROW(source.map(mapper), std::runtime_error);
+    EXPECT_THROW(source.where(predicate), std::runtime_error);
+    EXPECT_THROW(source.reduce(0, [](int total, const int& value) {
+        if (value == 2) {
+            throw std::runtime_error("reducer failed");
+        }
+        return total + value;
+    }), std::runtime_error);
+    EXPECT_EQ(source.size(), 2u);
+    EXPECT_TRUE(source.contains(1));
+    EXPECT_TRUE(source.contains(2));
 }
