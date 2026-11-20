@@ -25,6 +25,8 @@ public:
     explicit AVLTree(Compare comp);
 
     AVLTree(const AVLTree& other);
+    // the supplied comparator must define the same order as the source comparator
+    AVLTree(const AVLTree& other, Compare comp);
     AVLTree(AVLTree&& other) noexcept(std::is_nothrow_copy_constructible_v<Compare>);
 
     // assignment requires a comparator with a nonthrowing swap
@@ -42,6 +44,12 @@ public:
     std::size_t size() const noexcept;
     bool empty() const noexcept;
     void clear() noexcept;
+    const Compare& key_comp() const noexcept;
+
+    // stop the inorder traversal as soon as the predicate returns false
+    template <typename Predicate>
+        requires std::predicate<Predicate&, const T&>
+    bool all_of(Predicate&& predicate) const;
 
     // the visitor must not modify the structure of this tree during traversal
     template <typename Visitor>
@@ -103,6 +111,9 @@ private:
 
     template <typename Visitor>  // any callable typename
     static void traverse_impl(const Node<T>& node, TraversalOrder order, Visitor& visitor);
+
+    template <typename Predicate>
+    static bool all_of_impl(const node_link& link, Predicate& predicate);
 };
 
 #include "avl_tree.tpp"

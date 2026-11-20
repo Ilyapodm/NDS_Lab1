@@ -1,3 +1,4 @@
+#include "comparator_utils.hpp"
 #include "avl_tree_utils.hpp"
 
 #include <gtest/gtest.h>
@@ -468,4 +469,72 @@ TEST(AvlTree, MapAndWherePreserveComparatorState) {
     EXPECT_EQ(mapped.reduce(std::string{}, join), "13 12 11 ");
     EXPECT_EQ(filtered.reduce(std::string{}, join), "3 2 ");
     EXPECT_EQ(tree.reduce(std::string{}, join), "3 2 1 ");
+}
+
+TEST(AvlTree, AllOfStopsAtFirstFailureAndAcceptsEmptyTree) {
+    AVLTree<int> tree;
+    int calls = 0;
+    auto predicate = [&](const int& value) {
+        ++calls;
+        return value < 2;
+    };
+    EXPECT_TRUE(tree.all_of(predicate));
+    EXPECT_EQ(calls, 0);
+
+    TreeChecks::insert_values(tree, {2, 1, 3, 4});
+    EXPECT_FALSE(tree.all_of(predicate));
+    EXPECT_EQ(calls, 2);
+    EXPECT_TRUE(tree.all_of([](const int& value) { return value > 0; }));
+    TreeChecks::expect_valid(tree, 4);
+}
+
+TEST(AvlTree, CopyWithSelectedComparatorPreservesShapeAndIndependentNodes) {
+    using comparator_test::CountingOrder;
+    using Tree = AVLTree<int, CountingOrder>;
+    int source_calls = 0;
+    int selected_calls = 0;
+    Tree source(CountingOrder{std::ref(source_calls)});
+    for (int value : {4, 2, 6, 1}) {
+        ASSERT_TRUE(source.insert(value));
+    }
+
+    Tree copy(source, CountingOrder{std::ref(selected_calls)});
+    EXPECT_EQ(copy.size(), 4u);
+    EXPECT_EQ(copy.serialize(), source.serialize());
+    EXPECT_EQ(&copy.key_comp().calls.get(), &selected_calls);
+    source_calls = 0;
+    selected_calls = 0;
+    EXPECT_TRUE(copy.contains(1));
+    EXPECT_GT(selected_calls, 0);
+    EXPECT_EQ(source_calls, 0);
+
+    const auto original = source.find(4);
+    const auto cloned = copy.find(4);
+    ASSERT_TRUE(original && cloned);
+    EXPECT_NE(&original->get(), &cloned->get());
+    EXPECT_TRUE(copy.erase(2));
+    EXPECT_EQ(copy.size(), 3u);
+    EXPECT_TRUE(source.contains(2));
+
+    Tree empty(CountingOrder{std::ref(source_calls)});
+    Tree empty_copy(empty, CountingOrder{std::ref(selected_calls)});
+    EXPECT_TRUE(empty_copy.empty());
+    EXPECT_EQ(&empty_copy.key_comp().calls.get(), &selected_calls);
+}
+
+TEST(AvlTree, CopyWithSelectedComparatorCleansUpAfterCopyFailure) {
+    using avl_test::CopyCheckedKey;
+    using Tree = AVLTree<CopyCheckedKey>;
+    Tree source;
+    ASSERT_TRUE(source.insert(CopyCheckedKey{2}));
+    ASSERT_TRUE(source.insert(CopyCheckedKey{1}));
+
+    // the first node is already allocated when the second value copy fails
+    CopyCheckedKey::copies_before_failure = 1;
+    EXPECT_THROW((Tree(source, std::less<CopyCheckedKey>{})), std::runtime_error);
+    CopyCheckedKey::copies_before_failure = -1;
+
+    EXPECT_EQ(source.size(), 2u);
+    EXPECT_TRUE(source.contains(CopyCheckedKey{1}));
+    EXPECT_TRUE(source.contains(CopyCheckedKey{2}));
 }

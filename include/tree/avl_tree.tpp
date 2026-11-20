@@ -19,6 +19,10 @@ AVLTree<T, Compare>::AVLTree(const AVLTree& other)
     {}
 
 template <typename T, typename Compare>
+AVLTree<T, Compare>::AVLTree(const AVLTree& other, Compare comp)
+    : comp_(std::move(comp)), root_(clone(other.root_)), size_(other.size_) {}
+
+template <typename T, typename Compare>
 AVLTree<T, Compare>::AVLTree(AVLTree&& other)
     noexcept(std::is_nothrow_copy_constructible_v<Compare>) // conditional noexcept
     // copy the comparator before taking ownership so a failed copy leaves other intact
@@ -514,4 +518,30 @@ typename AVLTree<T, Compare>::node_link AVLTree<T, Compare>::deserialize_impl(
     }
     ++size_;
     return node;
+}
+
+template <typename T, typename Compare>
+const Compare& AVLTree<T, Compare>::key_comp() const noexcept {
+    return comp_;
+}
+
+template <typename T, typename Compare>
+template <typename Predicate>
+    requires std::predicate<Predicate&, const T&>
+bool AVLTree<T, Compare>::all_of(Predicate&& predicate) const {
+    return all_of_impl(root_, predicate);
+}
+
+template <typename T, typename Compare>
+template <typename Predicate>
+bool AVLTree<T, Compare>::all_of_impl(const node_link& link, Predicate& predicate) {
+    if (!link) {
+        return true;
+    }
+
+    const Node<T>& node = *link;  // for chosing 'const T&' override in the predicate
+    // && skips both the remaining values and their recursive calls after failure
+    return all_of_impl(node.left, predicate)
+        && std::invoke(predicate, node.value)
+        && all_of_impl(node.right, predicate);
 }
