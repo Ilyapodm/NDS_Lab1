@@ -1,3 +1,7 @@
+#pragma once
+
+#include "set/set.hpp"
+
 template <typename T, typename Compare>
 Set<T, Compare>::Set(Compare comp) : tree_(std::move(comp)) {}
 

@@ -1,3 +1,7 @@
+#pragma once
+
+#include "tree/avl_tree.hpp"
+
 #include "containers/queue.hpp"
 #include "serialization/serialization_utils.hpp"
 
