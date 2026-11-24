@@ -16,6 +16,7 @@ namespace avl_test {
 class TreeChecks;
 }
 
+// id <-> comparator
 template <typename T, typename Compare = std::less<T>>
 class AVLTree {
 public:
